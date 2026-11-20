@@ -24,9 +24,10 @@ const (
 	stateError    connectorapi.StateName = "ERROR"
 )
 
-// states is this dialect's declared state set. A print starts from Mainsail,
-// Fluidd or the machine's own screen and not through this driver, so every
-// move into PRINTING is one the machine makes on its own.
+// states is this dialect's declared state set. Each idle and terminal state
+// declares two transitions to PRINTING: one with VerbStartPrint for prints
+// started through Prusa Connect, and one without a verb for prints started
+// externally from Mainsail, Fluidd, or the printer screen.
 func states() connectorapi.StateSet {
 	base := []connectorapi.Capability{VerbSendStateInfo, VerbNozzleTarget, VerbBedTarget}
 	idle := append([]connectorapi.Capability{VerbStartPrint}, base...)

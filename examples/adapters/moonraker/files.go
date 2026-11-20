@@ -189,7 +189,7 @@ func (s *Session) List(ctx context.Context, rawPath string) (connectorapi.Listin
 	}
 
 	if metaRefusal != nil {
-		return connectorapi.Listing{}, listingRefused(rawPath, refusal.Message)
+		return connectorapi.Listing{}, listingRefused(rawPath, metaRefusal.Message)
 	}
 
 	var meta fileMetadataReply
@@ -197,7 +197,7 @@ func (s *Session) List(ctx context.Context, rawPath string) (connectorapi.Listin
 		return connectorapi.Listing{}, err
 	}
 
-	preview := s.fetchThumbnail(ctx, meta.Thumbnails)
+	preview := s.fetchThumbnail(ctx, rel, meta.Thumbnails)
 	name := pathpkg.Base(clean)
 
 	return connectorapi.Listing{
@@ -329,6 +329,8 @@ func (s *Session) DeleteFolder(ctx context.Context, rawPath string) error {
 		return err
 	}
 
+	// Pass force: true so non-empty folders delete recursively, matching
+	// Prusa Connect's folder deletion expectations.
 	_, refusal, callErr := s.call(
 		ctx,
 		methodFilesDeleteDirectory,
@@ -568,7 +570,7 @@ func streamMultipart(
 	return pipeWriter.Close()
 }
 
-func (s *Session) fetchThumbnail(ctx context.Context, thumbs []moonrakerThumbnail) []byte {
+func (s *Session) fetchThumbnail(ctx context.Context, gcodeRelPath string, thumbs []moonrakerThumbnail) []byte {
 	if len(thumbs) == 0 || s.httpBaseURL == "" {
 		return nil
 	}
@@ -584,7 +586,18 @@ func (s *Session) fetchThumbnail(ctx context.Context, thumbs []moonrakerThumbnai
 		return nil
 	}
 
-	segments := strings.Split(strings.TrimLeft(best.RelativePath, "/"), "/")
+	thumbRel := strings.TrimLeft(best.RelativePath, "/")
+	if parent := pathpkg.Dir(gcodeRelPath); parent != "." && parent != "" {
+		thumbRel = pathpkg.Join(parent, thumbRel)
+	} else {
+		thumbRel = pathpkg.Clean(thumbRel)
+	}
+
+	if thumbRel == "." || connectorapi.PathEscapes(thumbRel) {
+		return nil
+	}
+
+	segments := strings.Split(thumbRel, "/")
 	for i, seg := range segments {
 		segments[i] = url.PathEscape(seg)
 	}

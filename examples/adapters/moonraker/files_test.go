@@ -65,6 +65,8 @@ func TestMoonrakerStoragesAndListings(t *testing.T) {
 	machine.PutFile("benchy.gcode", []byte("G28\n"))
 	machine.PutFile("projects/part.gcode", []byte("G1 X10\n"))
 	machine.PutFile(".thumbs/benchy-32x32.png", []byte("png"))
+	machine.PutFile(".thumbs/benchy-300x300.png", []byte("root-thumb"))
+	machine.PutFile("projects/.thumbs/part-300x300.png", []byte("sub-thumb"))
 
 	session := connect(t, machine)
 
@@ -99,11 +101,20 @@ func TestMoonrakerStoragesAndListings(t *testing.T) {
 	require.Contains(t, paths, "gcodes/benchy.gcode")
 	require.NotContains(t, paths, "gcodes/.thumbs")
 
+	rootSingle, err := files.List(t.Context(), "gcodes/benchy.gcode")
+	require.NoError(t, err)
+	require.Equal(t, []byte("root-thumb"), rootSingle.Directory.Preview)
+
 	single, err := files.List(t.Context(), "gcodes/projects/part.gcode")
 	require.NoError(t, err)
 	require.False(t, single.Directory.Folder)
 	require.Equal(t, "gcodes/projects/part.gcode", single.Directory.Path)
 	require.Equal(t, int64(len("G1 X10\n")), single.Directory.Size)
+	require.Equal(t, []byte("sub-thumb"), single.Directory.Preview)
+
+	_, err = files.List(t.Context(), "gcodes/missing.gcode")
+	require.ErrorIs(t, err, connectorapi.ErrListingRefused)
+	require.ErrorContains(t, err, "Metadata not available for requested file")
 }
 
 func TestMoonrakerFileManagerAndStartPrint(t *testing.T) {
